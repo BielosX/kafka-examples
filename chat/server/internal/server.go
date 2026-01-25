@@ -86,10 +86,12 @@ type ResponseMessage struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-var expectedCloseStatuses = map[websocket.StatusCode]struct{}{
-	websocket.StatusNormalClosure: {},
-	websocket.StatusGoingAway:     {},
-	websocket.StatusNoStatusRcvd:  {},
+var expectedCloseStatuses = NewSet[websocket.StatusCode]()
+
+func init() {
+	expectedCloseStatuses.AddValues(websocket.StatusNormalClosure,
+		websocket.StatusGoingAway,
+		websocket.StatusNoStatusRcvd)
 }
 
 func (s *Server) kafkaWriteMessages(ctx context.Context,
@@ -103,8 +105,7 @@ func (s *Server) kafkaWriteMessages(ctx context.Context,
 			msgType, msg, err := c.Read(ctx)
 			if err != nil {
 				status := websocket.CloseStatus(err)
-				_, contains := expectedCloseStatuses[status]
-				if contains {
+				if expectedCloseStatuses.Contains(status) {
 					s.logger.Infof("Connection with room %s closed with expected status: %d", room, status)
 					return nil
 				}
@@ -152,8 +153,7 @@ func (s *Server) kafkaReadMessages(ctx context.Context,
 				err := c.Write(ctx, websocket.MessageText, r)
 				if err != nil {
 					status := websocket.CloseStatus(err)
-					_, contains := expectedCloseStatuses[status]
-					if contains {
+					if expectedCloseStatuses.Contains(status) {
 						s.logger.Infof("Connection with room %s closed with expected status: %d", room, status)
 						return nil
 					}
