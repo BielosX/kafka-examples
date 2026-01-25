@@ -4,9 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net"
 	"os"
-	"strconv"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -162,28 +160,15 @@ func createTopic(args []string) {
 	if host == "" || topic == "" {
 		errorLine("Topic and Host required")
 	}
-	conn, err := kafka.Dial("tcp", host)
-	if err != nil {
-		errorFmt("Unable to connect to %s, error: %v", host, err)
+	client := kafka.Client{
+		Addr: kafka.TCP(host),
 	}
-	defer func(conn *kafka.Conn) {
-		_ = conn.Close()
-	}(conn)
-	controller, err := conn.Controller()
-	if err != nil {
-		errorFmt("Unable to get Controller, error: %v", err)
-	}
-	controllerConn, err := kafka.Dial("tcp", net.JoinHostPort(controller.Host, strconv.Itoa(controller.Port)))
-	if err != nil {
-		errorFmt("Unable to connect to the controller %s, error: %v", controller.Host, err)
-	}
-	defer func(controllerConn *kafka.Conn) {
-		_ = controllerConn.Close()
-	}(controllerConn)
-	err = controllerConn.CreateTopics(kafka.TopicConfig{
-		Topic:             topic,
-		NumPartitions:     int(partitions),
-		ReplicationFactor: int(replication),
+	_, err := client.CreateTopics(context.Background(), &kafka.CreateTopicsRequest{
+		Topics: []kafka.TopicConfig{{
+			Topic:             topic,
+			NumPartitions:     int(partitions),
+			ReplicationFactor: int(replication),
+		}},
 	})
 	if err != nil {
 		errorFmt("Unable to create topic, error: %v", err)
