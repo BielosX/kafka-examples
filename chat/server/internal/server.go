@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"slices"
 	"sync"
+	"time"
 
 	"github.com/coder/websocket"
 	"github.com/go-chi/chi/v5"
@@ -81,13 +81,20 @@ type KafkaMessage struct {
 	Payload string `json:"payload"`
 }
 
-var expectedCloseStatus = []websocket.StatusCode{
-	websocket.StatusNormalClosure,
-	websocket.StatusGoingAway,
-	websocket.StatusNoStatusRcvd,
+type ResponseMessage struct {
+	KafkaMessage
+	Timestamp time.Time `json:"timestamp"`
 }
 
-func (s *Server) kafkaWriteMessages(ctx context.Context, c *websocket.Conn, nick, room string) error {
+var expectedCloseStatuses = map[websocket.StatusCode]struct{}{
+	websocket.StatusNormalClosure: {},
+	websocket.StatusGoingAway:     {},
+	websocket.StatusNoStatusRcvd:  {},
+}
+
+func (s *Server) kafkaWriteMessages(ctx context.Context,
+	c *websocket.Conn,
+	nick, room string) error {
 	for {
 		select {
 		case <-ctx.Done():
@@ -96,7 +103,8 @@ func (s *Server) kafkaWriteMessages(ctx context.Context, c *websocket.Conn, nick
 			msgType, msg, err := c.Read(ctx)
 			if err != nil {
 				status := websocket.CloseStatus(err)
-				if slices.Contains(expectedCloseStatus, status) {
+				_, contains := expectedCloseStatuses[status]
+				if contains {
 					s.logger.Infof("Connection with room %s closed with expected status: %d", room, status)
 					return nil
 				}
@@ -134,10 +142,18 @@ func (s *Server) kafkaReadMessages(ctx context.Context,
 		select {
 		case msg := <-channel:
 			if string(msg.Key) == room {
-				err := c.Write(ctx, websocket.MessageText, msg.Value)
+				var message KafkaMessage
+				_ = json.Unmarshal(msg.Value, &message)
+				response := ResponseMessage{
+					KafkaMessage: message,
+					Timestamp:    msg.Time,
+				}
+				r, _ := json.Marshal(&response)
+				err := c.Write(ctx, websocket.MessageText, r)
 				if err != nil {
 					status := websocket.CloseStatus(err)
-					if slices.Contains(expectedCloseStatus, status) {
+					_, contains := expectedCloseStatuses[status]
+					if contains {
 						s.logger.Infof("Connection with room %s closed with expected status: %d", room, status)
 						return nil
 					}
