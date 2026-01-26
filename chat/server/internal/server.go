@@ -176,8 +176,13 @@ func (s *Server) processKafkaMessages(ctx context.Context) error {
 				return err
 			}
 			s.mutex.Lock()
-			for _, v := range s.subscriptions {
-				v <- msg
+			for k, v := range s.subscriptions {
+				select {
+				case v <- msg:
+					s.logger.Infof("Message sent to subscription %d", k)
+				default:
+					s.logger.Warnf("Channel for subscription %d is full", k)
+				}
 			}
 			s.mutex.Unlock()
 		}
