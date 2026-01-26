@@ -4,15 +4,13 @@ type Set[T comparable] struct {
 	values map[T]struct{}
 }
 
-func NewSet[T comparable]() Set[T] {
-	return Set[T]{
-		values: make(map[T]struct{}),
-	}
-}
-
-func (s *Set[T]) AddValues(values ...T) {
+func NewSetWithValues[T comparable](values ...T) Set[T] {
+	state := make(map[T]struct{}, len(values))
 	for _, value := range values {
-		s.values[value] = struct{}{}
+		state[value] = struct{}{}
+	}
+	return Set[T]{
+		values: state,
 	}
 }
 

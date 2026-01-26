@@ -86,13 +86,10 @@ type ResponseMessage struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-var expectedCloseStatuses = NewSet[websocket.StatusCode]()
-
-func init() {
-	expectedCloseStatuses.AddValues(websocket.StatusNormalClosure,
-		websocket.StatusGoingAway,
-		websocket.StatusNoStatusRcvd)
-}
+var expectedCloseStatuses = NewSetWithValues[websocket.StatusCode](
+	websocket.StatusNormalClosure,
+	websocket.StatusGoingAway,
+	websocket.StatusNoStatusRcvd)
 
 func (s *Server) kafkaWriteMessages(ctx context.Context,
 	c *websocket.Conn,
