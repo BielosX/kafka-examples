@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"protobuf/gen"
 	"time"
 
@@ -14,13 +13,6 @@ import (
 
 func closeNow(c *websocket.Conn) {
 	err := c.CloseNow()
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func closeBody(r *http.Response) {
-	err := r.Body.Close()
 	if err != nil {
 		panic(err.Error())
 	}
