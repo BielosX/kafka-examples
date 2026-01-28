@@ -72,4 +72,8 @@ func main() {
 	from := serverResponse.GetPayload().GetFrom()
 	timestamp := serverResponse.GetTimestamp()
 	fmt.Printf("[%s]%s: %s", timestamp.AsTime().Format(time.RFC3339), from, message)
+	err = c.Close(websocket.StatusNormalClosure, "")
+	if err != nil {
+		panic(err.Error())
+	}
 }
