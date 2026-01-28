@@ -2,3 +2,4 @@ main
 .idea
 cli/cli
 chat/server/server
+chat/client/client

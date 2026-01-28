@@ -2,10 +2,10 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"protobuf/gen"
 	"sync"
 	"time"
 
@@ -14,6 +14,8 @@ import (
 	"github.com/segmentio/kafka-go"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Server struct {
@@ -74,7 +76,7 @@ func (s *Server) closeWebsocketNow(c *websocket.Conn) {
 	}
 }
 
-var ErrorBadMessageType = errors.New("text message expected")
+var ErrorBadMessageType = errors.New("binary message expected")
 
 type KafkaMessage struct {
 	From    string `json:"from"`
@@ -109,15 +111,22 @@ func (s *Server) kafkaWriteMessages(ctx context.Context,
 				s.logger.Errorf("Fail to read a message from a websocket, close status: %d, error: %v", status, err)
 				return err
 			}
-			if msgType != websocket.MessageText {
+			if msgType != websocket.MessageBinary {
 				return ErrorBadMessageType
 			}
-			kafkaMessage := &KafkaMessage{
-				From:    nick,
-				Payload: string(msg),
-			}
-			encoded, err := json.Marshal(kafkaMessage)
+			clientRequest := &messages.MessageContent{}
+			err = proto.Unmarshal(msg, clientRequest)
 			if err != nil {
+				s.logger.Errorf("Unable to unmarshall messages.ClientRequest, error: %v", err)
+				return err
+			}
+			kafkaMessageBuilder := messages.KafkaPayload_builder{}
+			kafkaMessageBuilder.Content = clientRequest
+			kafkaMessageBuilder.From = proto.String(nick)
+			kafkaPayload := kafkaMessageBuilder.Build()
+			encoded, err := proto.Marshal(kafkaPayload)
+			if err != nil {
+				s.logger.Errorf("Unable to marshall KafkaPayload, error: %v", err)
 				return err
 			}
 			err = s.writer.WriteMessages(ctx, kafka.Message{
@@ -140,14 +149,22 @@ func (s *Server) kafkaReadMessages(ctx context.Context,
 		select {
 		case msg := <-channel:
 			if string(msg.Key) == room {
-				var message KafkaMessage
-				_ = json.Unmarshal(msg.Value, &message)
-				response := ResponseMessage{
-					KafkaMessage: message,
-					Timestamp:    msg.Time,
+				kafkaPayload := &messages.KafkaPayload{}
+				err := proto.Unmarshal(msg.Value, kafkaPayload)
+				if err != nil {
+					s.logger.Errorf("Unable to unmarshall KafkaPayload, error: %v", err)
+					return err
 				}
-				r, _ := json.Marshal(&response)
-				err := c.Write(ctx, websocket.MessageText, r)
+				serverResponseBuilder := messages.ServerResponse_builder{}
+				serverResponseBuilder.Payload = kafkaPayload
+				serverResponseBuilder.Timestamp = timestamppb.New(msg.Time)
+				response := serverResponseBuilder.Build()
+				payload, err := proto.Marshal(response)
+				if err != nil {
+					s.logger.Errorf("Unable to marshall ServerResponse, error: %v", err)
+					return err
+				}
+				err = c.Write(ctx, websocket.MessageBinary, payload)
 				if err != nil {
 					status := websocket.CloseStatus(err)
 					if expectedCloseStatuses.Contains(status) {
