@@ -226,9 +226,9 @@ func (m *ChatModel) updateConnectionInput(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m *ChatModel) writeMessage(msg string) error {
+func (m *ChatModel) writeMessage(msg string, severity *messages.MessageSeverity) error {
 	builder := messages.MessageContent_builder{}
-	builder.Severity = messages.MessageSeverity_NORMAL.Enum()
+	builder.Severity = severity
 	builder.Message = proto.String(msg)
 	content := builder.Build()
 	payload, err := proto.Marshal(content)
@@ -257,7 +257,13 @@ func (m *ChatModel) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEsc:
 			return m, tea.Quit
 		case tea.KeyEnter:
-			m.err = m.writeMessage(m.chatInput.Value())
+			m.err = m.writeMessage(m.chatInput.Value(), messages.MessageSeverity_NORMAL.Enum())
+			m.chatInput.Reset()
+		case tea.KeyCtrlI:
+			m.err = m.writeMessage(m.chatInput.Value(), messages.MessageSeverity_IMPORTANT.Enum())
+			m.chatInput.Reset()
+		case tea.KeyCtrlC:
+			m.err = m.writeMessage(m.chatInput.Value(), messages.MessageSeverity_CRITICAL.Enum())
 			m.chatInput.Reset()
 		}
 	}
