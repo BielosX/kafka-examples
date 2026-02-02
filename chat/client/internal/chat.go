@@ -38,12 +38,14 @@ type ChatModel struct {
 }
 
 var (
-	focusedStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
-	noStyle       = lipgloss.NewStyle()
-	blurredStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	errorStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff0000"))
-	focusedButton = focusedStyle.Render("[ Connect ]")
-	blurredButton = fmt.Sprintf("[ %s ]", blurredStyle.Render("Connect"))
+	focusedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+	noStyle        = lipgloss.NewStyle()
+	blurredStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	errorStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff0000"))
+	focusedButton  = focusedStyle.Render("[ Connect ]")
+	blurredButton  = fmt.Sprintf("[ %s ]", blurredStyle.Render("Connect"))
+	importantStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#f5bf42"))
+	criticalStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#731414"))
 )
 
 func NewChatModel() *ChatModel {
@@ -56,7 +58,7 @@ func NewChatModel() *ChatModel {
 	model := &ChatModel{
 		state:     ConnectionInputState,
 		inputs:    make([]textinput.Model, 3),
-		viewport:  viewport.New(30, 5),
+		viewport:  viewport.New(80, 5),
 		chatInput: chatInput,
 		msgChan:   make(chan *messages.ServerResponse, 1024),
 		errChan:   make(chan error),
@@ -151,12 +153,24 @@ func (m *ChatModel) handleTick() (tea.Model, tea.Cmd) {
 	for i := 0; i < 50; i++ {
 		select {
 		case msg := <-m.msgChan:
-			m.messages = append(m.messages, msg.GetPayload().GetContent().GetMessage())
+			timestamp := msg.GetTimestamp().AsTime().Format(time.RFC3339)
+			from := msg.GetPayload().GetFrom()
+			message := msg.GetPayload().GetContent().GetMessage()
+			line := fmt.Sprintf("[%s] %s: %s", timestamp, from, message)
+			switch msg.GetPayload().GetContent().GetSeverity() {
+			case messages.MessageSeverity_NORMAL:
+				m.messages = append(m.messages, line)
+			case messages.MessageSeverity_IMPORTANT:
+				m.messages = append(m.messages, importantStyle.Render(line))
+			case messages.MessageSeverity_CRITICAL:
+				m.messages = append(m.messages, criticalStyle.Render(line))
+			}
 		default:
 			// noop
 		}
 	}
 	m.viewport.SetContent(lipgloss.NewStyle().Width(m.viewport.Width).Render(strings.Join(m.messages, "\n")))
+	m.viewport.GotoBottom()
 	return m, doTick()
 }
 
