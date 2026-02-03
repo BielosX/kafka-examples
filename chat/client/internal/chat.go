@@ -255,6 +255,7 @@ func (m *ChatModel) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyEsc:
+			_ = m.connection.Close(websocket.StatusGoingAway, "")
 			return m, tea.Quit
 		case tea.KeyEnter:
 			m.err = m.writeMessage(m.chatInput.Value(), messages.MessageSeverity_NORMAL.Enum())
