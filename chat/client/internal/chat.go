@@ -2,6 +2,7 @@ package internal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"protobuf/gen"
 	"strings"
@@ -121,14 +122,20 @@ func (m *ChatModel) readMessages(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		default:
-			_, msg, err := m.connection.Read(ctx)
+			t, msg, err := m.connection.Read(ctx)
 			if err != nil {
 				m.errChan <- err
+				continue
+			}
+			if t != websocket.MessageBinary {
+				m.errChan <- errors.New(fmt.Sprintf("received unsupported message type: %s", t.String()))
+				continue
 			}
 			var response messages.ServerResponse
 			err = proto.Unmarshal(msg, &response)
 			if err != nil {
 				m.errChan <- err
+				continue
 			}
 			m.msgChan <- &response
 		}
@@ -301,7 +308,14 @@ func (m *ChatModel) View() string {
 			_, _ = fmt.Fprintf(&builder, "\n%s\n\n", *button)
 		}
 	case ChatState:
-		_, _ = fmt.Fprintf(&builder, "%s\n\n%s\n", m.viewport.View(), m.chatInput.View())
+		if m.err != nil {
+			_, _ = fmt.Fprintf(&builder, "%s\n\n%s\n%s\n",
+				m.viewport.View(),
+				m.chatInput.View(),
+				errorStyle.Render(m.err.Error()))
+		} else {
+			_, _ = fmt.Fprintf(&builder, "%s\n\n%s\n", m.viewport.View(), m.chatInput.View())
+		}
 	}
 	return builder.String()
 }
