@@ -249,6 +249,11 @@ func (m *ChatModel) writeMessage(msg string, severity *messages.MessageSeverity)
 	return nil
 }
 
+func (m *ChatModel) send(severity *messages.MessageSeverity) {
+	m.err = m.writeMessage(m.chatInput.Value(), severity)
+	m.chatInput.Reset()
+}
+
 func (m *ChatModel) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		tiCmd tea.Cmd
@@ -265,14 +270,11 @@ func (m *ChatModel) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			_ = m.connection.Close(websocket.StatusGoingAway, "")
 			return m, tea.Quit
 		case tea.KeyEnter:
-			m.err = m.writeMessage(m.chatInput.Value(), messages.MessageSeverity_NORMAL.Enum())
-			m.chatInput.Reset()
+			m.send(messages.MessageSeverity_NORMAL.Enum())
 		case tea.KeyCtrlI:
-			m.err = m.writeMessage(m.chatInput.Value(), messages.MessageSeverity_IMPORTANT.Enum())
-			m.chatInput.Reset()
+			m.send(messages.MessageSeverity_IMPORTANT.Enum())
 		case tea.KeyCtrlC:
-			m.err = m.writeMessage(m.chatInput.Value(), messages.MessageSeverity_CRITICAL.Enum())
-			m.chatInput.Reset()
+			m.send(messages.MessageSeverity_CRITICAL.Enum())
 		}
 	}
 	return m, tea.Batch(tiCmd, vpCmd)
